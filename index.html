@@ -176,15 +176,15 @@ input:focus,select:focus,textarea:focus{border-color:var(--red);box-shadow:0 0 0
 
 <section class="section alt" id="payment">
 <div class="container">
-<div class="section-title"><h2>Secure payment</h2><p>Enter the amount due and initiate an M-Pesa payment request with automatic retry.</p></div>
+<div class="section-title"><h2>Secure payment via LOOP</h2><p>Enter your phone and amount. LOOP will send a secure M-Pesa prompt with automatic retry on timeout.</p></div>
 <div class="pay-grid">
-<div class="pay-card"><h3>Pay with M-Pesa</h3><p>Enter your phone and the amount. The system will retry the M-Pesa PIN prompt if you don't respond.</p>
-<div class="field"><label style="color:#ddd">M-Pesa phone</label><input id="payPhone" placeholder="07... or 01..." style="background:#1b1b20;color:white;border-color:#3a3a42"></div>
-<div class="field"><label style="color:#ddd">Amount (KSh)</label><input id="payAmount" type="number" min="1" step="1" placeholder="Amount" style="background:#1b1b20;color:white;border-color:#3a3a42"></div>
+<div class="pay-card"><h3>Pay with M-Pesa (LOOP)</h3><p>Fast, secure payments via LOOP gateway. The M-Pesa prompt will be sent to your phone.</p>
+<div class="field"><label style="color:#ddd">M-Pesa phone *</label><input id="payPhone" placeholder="254... or 07..." style="background:#1b1b20;color:white;border-color:#3a3a42" required></div>
+<div class="field"><label style="color:#ddd">Amount (KSh) *</label><input id="payAmount" type="number" min="1" step="1" placeholder="Amount" style="background:#1b1b20;color:white;border-color:#3a3a42" required></div>
 <div class="field"><label style="color:#ddd">Retry attempts</label><input id="payRetries" type="number" min="1" max="5" value="3" style="background:#1b1b20;color:white;border-color:#3a3a42"></div>
-<button class="btn red" onclick="startPayment(event)">Request payment</button>
-<div class="secure">✓ PIN is entered on the M-Pesa handset — never collect the M-Pesa PIN on your website.</div></div>
-<div class="card"><h3>Existing manual payment</h3><p>Current business payment details retained from the original portal.</p><h4 style="margin-top:15px">M-Pesa Paybill</h4><p><b>Business Number:</b> 714888</p><p><b>Account Number:</b> 472042</p></div>
+<button class="btn red" type="button" onclick="startPayment(event)">Send M-Pesa prompt</button>
+<div class="secure">✓ PIN entered on your phone only — we never collect M-Pesa PINs</div></div>
+<div class="card"><h3>Merchant details</h3><p>Current business payment information.</p><h4 style="margin-top:15px">LOOP Merchant Till</h4><p><b>Till:</b> 472042</p><p class="privacy" style="margin-top:10px">Powered by <strong>LOOP</strong> — Kenya's fastest payment platform</p></div>
 </div>
 </section>
 
@@ -261,6 +261,8 @@ const SERVICES = [
 ];
 
 const statuses=["Submitted","Processing","Ready","Completed"];
+const MERCHANT_TILL = "472042";
+
 function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));}
 function showToast(msg){const t=document.getElementById("toast");t.textContent=msg;t.style.display="block";setTimeout(()=>t.style.display="none",3000);}
 function makeRef(){const d=new Date();const date=d.toISOString().slice(2,10).replaceAll("-","");return `STC-${date}-${Math.floor(1000+Math.random()*9000)}`;}
@@ -376,7 +378,7 @@ function refreshAdmin(){
 }
 function changeStatus(i,status){const o=getOrders();o[i].status=status;saveOrders(o);refreshAdmin();showToast("Order status updated");}
 
-// M-Pesa payment with retry loop
+// LOOP M-Pesa payment with retry loop
 async function startPayment(e){
  e.preventDefault();
  const phone=document.getElementById("payPhone").value.trim();
@@ -385,24 +387,48 @@ async function startPayment(e){
  
  if(!phone||!amount){showToast("Enter phone number and amount");return}
  
- attemptMPesaPayment(phone, amount, retries, 1);
+ // Normalize phone to 254 format if needed
+ let normalizedPhone = phone;
+ if(phone.startsWith("07")||phone.startsWith("01")) {
+   normalizedPhone = "254" + phone.substring(1);
+ }
+ if(!normalizedPhone.startsWith("254")) {
+   normalizedPhone = "254" + phone;
+ }
+ 
+ attemptLoopPayment(normalizedPhone, amount, retries, 1);
 }
 
-async function attemptMPesaPayment(phone, amount, totalRetries, attempt){
- console.log(`M-Pesa payment attempt ${attempt}/${totalRetries}`);
+async function attemptLoopPayment(phone, amount, totalRetries, attempt){
+ console.log(`LOOP payment attempt ${attempt}/${totalRetries} for ${phone}, KSh ${amount}`);
+ showToast(`Sending M-Pesa prompt (${attempt}/${totalRetries})...`);
  
  try{
-  const res=await fetch("/api/payments/stk-push",{
-   method:"POST",
-   headers:{"Content-Type":"application/json"},
-   body:JSON.stringify({phone,amount})
+  // Call your backend to initiate LOOP payment
+  const response = await fetch("/api/loop/initiate-payment", {
+   method: "POST",
+   headers: {"Content-Type": "application/json"},
+   body: JSON.stringify({
+    phone: phone,
+    amount: amount,
+    reference: makeRef(),
+    till: MERCHANT_TILL,
+    description: "Siniora Tech Cyber Service Payment"
+   })
   });
   
-  if(!res.ok) throw new Error("backend unavailable");
+  if(!response.ok) {
+   const errorData = await response.json().catch(()=>({}));
+   throw new Error(errorData.message || `HTTP ${response.status}`);
+  }
   
-  const data=await res.json();
-  openModal("M-Pesa request sent",`PIN prompt sent to ${phone}. Attempt ${attempt}/${totalRetries}. Check your phone for the M-Pesa PIN.`);
-  showToast(`M-Pesa prompt sent (${attempt}/${totalRetries})`);
+  const data = await response.json();
+  
+  openModal(
+   "M-Pesa prompt sent",
+   `✓ Payment prompt sent to ${phone}\n\nAttempt ${attempt}/${totalRetries}\n\nPlease enter your M-Pesa PIN on your phone.\n\nIf you don't receive it, we'll retry automatically.`
+  );
+  showToast(`M-Pesa prompt sent to ${phone}`);
   
  }catch(err){
   console.error(`Attempt ${attempt} failed:`, err);
@@ -411,19 +437,19 @@ async function attemptMPesaPayment(phone, amount, totalRetries, attempt){
    const nextDelay = 3000 * attempt; // 3s, 6s, 9s between retries
    console.log(`Retrying in ${nextDelay/1000}s...`);
    
-   setTimeout(()=>{
-    attemptMPesaPayment(phone, amount, totalRetries, attempt + 1);
-   }, nextDelay);
+   showToast(`Attempt ${attempt} failed. Retrying in ${nextDelay/1000}s...`);
    
-   showToast(`Payment attempt ${attempt} failed. Retrying in ${nextDelay/1000}s...`);
+   setTimeout(()=>{
+    attemptLoopPayment(phone, amount, totalRetries, attempt + 1);
+   }, nextDelay);
    
   }else{
    // All retries exhausted
    openModal(
-    "Payment gateway setup required",
-    `The secure payment button is ready for a server-side Daraja STK Push integration. After ${totalRetries} attempts, the M-Pesa PIN prompt must appear on the customer's handset; this website cannot collect the PIN. Please contact us on WhatsApp for payment assistance.`
+    "Payment timeout",
+    `We attempted to send the M-Pesa prompt ${totalRetries} times to ${phone}.\n\nPlease try again or contact us on WhatsApp for assistance.`
    );
-   showToast("All payment attempts failed. Please contact us.");
+   showToast("Payment attempts failed. Please contact support.");
   }
  }
 }
