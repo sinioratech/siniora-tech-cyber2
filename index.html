@@ -466,5 +466,208 @@ function closeModal(){
 renderServices();
 refreshAdmin();
 </script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <!-- CUSTOMER ACCOUNT & COMMENTS -->
+<section id="customer-area" style="padding:30px 20px;max-width:900px;margin:auto;">
+  <h2>Customer Account</h2>
+
+  <div id="auth-box">
+    <input id="signup-name" type="text" placeholder="Full name">
+    <input id="signup-email" type="email" placeholder="Email address">
+    <input id="signup-password" type="password" placeholder="Password">
+
+    <button onclick="signUpCustomer()">Create Account</button>
+    <button onclick="signInCustomer()">Sign In</button>
+
+    <p id="auth-message"></p>
+  </div>
+
+  <div id="profile-box" style="display:none;">
+    <h3>Welcome, <span id="customer-name"></span>!</h3>
+    <button onclick="signOutCustomer()">Sign Out</button>
+
+    <hr>
+
+    <h3>Leave a Comment</h3>
+    <textarea id="customer-comment"
+      placeholder="Write your comment or feedback..."
+      rows="4"
+      style="width:100%;"></textarea>
+
+    <button onclick="submitComment()">Submit Comment</button>
+    <p id="comment-message"></p>
+
+    <h3>Customer Comments</h3>
+    <div id="comments-list"></div>
+  </div>
+</section>
+
+<script>
+const SUPABASE_URL = "https://lqaemxxcvwthyjvwshml.supabase.co/rest/v1/";
+const SUPABASE_KEY = "sb_publishable__eaHss63zoiiKEP_V8xOkg_M7nSiZHD";
+
+const supabaseClient = supabase.createClient(
+  SUPABASE_URL,
+  SUPABASE_KEY
+);
+
+async function signUpCustomer() {
+  const name = document.getElementById("signup-name").value.trim();
+  const email = document.getElementById("signup-email").value.trim();
+  const password = document.getElementById("signup-password").value;
+
+  if (!name || !email || !password) {
+    document.getElementById("auth-message").textContent =
+      "Please fill in all fields.";
+    return;
+  }
+
+  const { data, error } = await supabaseClient.auth.signUp({
+    email: email,
+    password: password,
+    options: {
+      data: {
+        full_name: name
+      }
+    }
+  });
+
+  if (error) {
+    document.getElementById("auth-message").textContent = error.message;
+    return;
+  }
+
+  if (data.user) {
+    const { error: profileError } = await supabaseClient
+      .from("profiles")
+      .insert({
+        id: data.user.id,
+        full_name: name,
+        phone: null
+      });
+
+    if (profileError) {
+      console.error(profileError);
+    }
+  }
+
+  document.getElementById("auth-message").textContent =
+    "Account created successfully. Check your email if confirmation is required.";
+}
+
+async function signInCustomer() {
+  const email = document.getElementById("signup-email").value.trim();
+  const password = document.getElementById("signup-password").value;
+
+  const { error } = await supabaseClient.auth.signInWithPassword({
+    email: email,
+    password: password
+  });
+
+  if (error) {
+    document.getElementById("auth-message").textContent = error.message;
+    return;
+  }
+
+  showCustomerProfile();
+}
+
+async function signOutCustomer() {
+  await supabaseClient.auth.signOut();
+
+  document.getElementById("profile-box").style.display = "none";
+  document.getElementById("auth-box").style.display = "block";
+}
+
+async function showCustomerProfile() {
+  const { data: { user } } = await supabaseClient.auth.getUser();
+
+  if (!user) return;
+
+  document.getElementById("auth-box").style.display = "none";
+  document.getElementById("profile-box").style.display = "block";
+
+  const { data: profile } = await supabaseClient
+    .from("profiles")
+    .select("full_name")
+    .eq("id", user.id)
+    .single();
+
+  document.getElementById("customer-name").textContent =
+    profile?.full_name || user.email;
+
+  loadComments();
+}
+
+async function submitComment() {
+  const comment = document.getElementById("customer-comment").value.trim();
+
+  if (!comment) {
+    document.getElementById("comment-message").textContent =
+      "Please write a comment first.";
+    return;
+  }
+
+  const { data: { user } } = await supabaseClient.auth.getUser();
+
+  if (!user) {
+    document.getElementById("comment-message").textContent =
+      "Please sign in first.";
+    return;
+  }
+
+  const { error } = await supabaseClient
+    .from("comments")
+    .insert({
+      user_id: user.id,
+      comment: comment
+    });
+
+  if (error) {
+    document.getElementById("comment-message").textContent =
+      error.message;
+    return;
+  }
+
+  document.getElementById("customer-comment").value = "";
+  document.getElementById("comment-message").textContent =
+    "Comment submitted successfully!";
+
+  loadComments();
+}
+
+async function loadComments() {
+  const { data, error } = await supabaseClient
+    .from("comments")
+    .select("comment, created_at")
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.error(error);
+    return;
+  }
+
+  const list = document.getElementById("comments-list");
+
+  list.innerHTML = data.map(item => `
+    <div style="background:#f5f5f5;padding:12px;margin:10px 0;border-radius:8px;">
+      <p>${escapeHtml(item.comment)}</p>
+      <small>${new Date(item.created_at).toLocaleString()}</small>
+    </div>
+  `).join("");
+}
+
+function escapeHtml(text) {
+  const div = document.createElement("div");
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+supabaseClient.auth.onAuthStateChange((event, session) => {
+  if (session) {
+    showCustomerProfile();
+  }
+});
+</script>
 </body>
 </html>
