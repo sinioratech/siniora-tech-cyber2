@@ -88,6 +88,45 @@ input:focus,select:focus,textarea:focus{border-color:var(--red);box-shadow:0 0 0
 <body>
 <div class="topbar"><div class="container"><span>🔒 Secure customer portal</span><span>WhatsApp: 0105 087 393 · Sun–Fri 8:00–18:00</span></div></div>
 <header>
+  <!-- CUSTOMER ACCOUNT & COMMENTS -->
+<section id="customer-area">
+  <h2>Customer Account</h2>
+
+  <div id="auth-box">
+    <input id="signup-name" type="text" placeholder="Full name">
+    <input id="signup-email" type="email" placeholder="Email address">
+    <input id="signup-password" type="password" placeholder="Password">
+
+    <button onclick="signUpCustomer()">Create Account</button>
+    <button onclick="signInCustomer()">Sign In</button>
+
+    <p id="auth-message"></p>
+  </div>
+
+  <div id="profile-box" style="display:none;">
+    <h3>Welcome, <span id="customer-name"></span>!</h3>
+
+    <button onclick="signOutCustomer()">Sign Out</button>
+
+    <hr>
+
+    <h3>Leave a Comment</h3>
+
+    <textarea
+      id="customer-comment"
+      placeholder="Write your comment or feedback..."
+      rows="4"
+      style="width:100%;"
+    ></textarea>
+
+    <button onclick="submitComment()">Submit Comment</button>
+
+    <p id="comment-message"></p>
+
+    <h3>Customer Comments</h3>
+    <div id="comments-list"></div>
+  </div>
+</section>
   <div class="container nav">
     <a class="brand" href="#home"><div class="brand-mark">ST</div><div>Siniora Tech Cyber<small>DIGITAL SERVICE PORTAL</small></div></a>
     <button class="menu" onclick="document.querySelector('.navlinks').classList.toggle('open')">☰</button>
